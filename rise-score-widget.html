@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Rise Quiz Average Calculator</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;padding:18px;margin:0}
+    .card{border-radius:10px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);background:#fff;max-width:560px;margin:0 auto}
+    label{display:block;margin-top:10px;font-weight:600}
+    input[type=number]{width:100%;padding:8px;margin-top:6px;border-radius:6px;border:1px solid #d0d0d0}
+    .row{display:flex;gap:8px;margin-top:12px}
+    button{padding:8px 12px;border-radius:8px;border:none;cursor:pointer}
+    .btn-primary{background:#2563eb;color:#fff}
+    .btn-ghost{background:#f3f4f6;border:1px solid #e5e7eb}
+    .result{margin-top:14px;padding:12px;border-radius:8px;background:#f8fafc;border:1px solid #e6eefc}
+    .pass{color: #065f46;font-weight:700}
+    .fail{color:#9b1c1c;font-weight:700}
+    small{color:#6b7280}
+    .muted{color:#6b7280;font-size:13px;margin-top:8px;display:block}
+  </style>
+</head>
+<body>
+  <div class="card" role="region" aria-label="Quiz average calculator">
+    <h3>Module Average Calculator</h3>
+    <p class="muted">Enter scores (0–100) or pass them via URL parameters: <code>?q1=80&q2=90&q3=100</code></p>
+
+    <label for="q1">Lesson 1 score</label>
+    <input id="q1" type="number" min="0" max="100" step="1" inputmode="numeric" />
+
+    <label for="q2">Lesson 2 score</label>
+    <input id="q2" type="number" min="0" max="100" step="1" inputmode="numeric" />
+
+    <label for="q3">Lesson 3 score</label>
+    <input id="q3" type="number" min="0" max="100" step="1" inputmode="numeric" />
+
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button id="saveBtn" class="btn-primary">Save scores</button>
+      <button id="calcBtn" class="btn-ghost">Calculate average</button>
+      <button id="clearBtn" class="btn-ghost">Clear saved</button>
+    </div>
+
+    <div class="result" id="resultArea" aria-live="polite" style="display:none">
+      <div>Average: <span id="avgVal" style="font-weight:800">—</span></div>
+      <div>Rounded (1 dp): <span id="avgRound">—</span></div>
+      <div id="passfail" style="margin-top:6px"></div>
+      <div style="margin-top:8px">
+        <button id="copyBtn" class="btn-primary">Copy final score</button>
+        <button id="exportJSON" class="btn-ghost">Export JSON</button>
+      </div>
+    </div>
+
+    <div class="muted" style="margin-top:12px">
+      Passing threshold: <input id="passThreshold" type="number" min="0" max="100" value="90" style="width:70px;padding:6px;border-radius:6px;border:1px solid #d0d0d0" />
+    </div>
+
+    <small>Note: This calculator stores scores locally in the browser (localStorage). It does not send results to your LMS.</small>
+  </div>
+
+<script>
+(function(){
+  const keyPrefix = 'rise_avg_q_'; // keys: rise_avg_q_1, rise_avg_q_2, rise_avg_q_3
+  const qEls = [document.getElementById('q1'), document.getElementById('q2'), document.getElementById('q3')];
+  const saveBtn = document.getElementById('saveBtn');
+  const calcBtn = document.getElementById('calcBtn');
+  const clearBtn = document.getElementById('clearBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const exportBtn = document.getElementById('exportJSON');
+  const resultArea = document.getElementById('resultArea');
+  const avgVal = document.getElementById('avgVal');
+  const avgRound = document.getElementById('avgRound');
+  const passfail = document.getElementById('passfail');
+  const passThreshold = document.getElementById('passThreshold');
+
+  function readFromLocal() {
+    for (let i=0;i<3;i++){
+      const v = localStorage.getItem(keyPrefix + (i+1));
+      if (v !== null) qEls[i].value = Number(v);
+    }
+  }
+
+  function saveToLocal() {
+    for (let i=0;i<3;i++){
+      const v = qEls[i].value;
+      if (v !== '') localStorage.setItem(keyPrefix + (i+1), String(Number(v)));
+    }
+    alert('Scores saved locally in this browser.');
+  }
+
+  function clearLocal() {
+    for (let i=0;i<3;i++) localStorage.removeItem(keyPrefix + (i+1));
+    qEls.forEach(e=>e.value='');
+    resultArea.style.display='none';
+  }
+
+  function parseURLParams() {
+    const params = new URLSearchParams(window.location.search);
+    let found = false;
+    for (let i=0;i<3;i++){
+      const p = params.get('q' + (i+1));
+      if (p !== null) {
+        qEls[i].value = Number(p);
+        found = true;
+      }
+    }
+    if (found) {
+      // auto-save and calc
+      saveToLocal();
+      calculateAndShow();
+    }
+  }
+
+  function calculateAndShow() {
+    const nums = qEls.map(e => {
+      const v = e.value;
+      return (v === '' || isNaN(Number(v))) ? null : Number(v);
+    });
+
+    // Must have at least one value filled (you can change rules)
+    if (nums.some(n=>n===null)) {
+      // allow partial? We'll treat empty as 0 by default — change if you prefer
+      // For clarity, require all three:
+      alert('Please enter all three lesson scores (0–100).');
+      return;
+    }
+
+    const avg = (nums[0] + nums[1] + nums[2]) / 3;
+    const avg1 = Math.round(avg * 10) / 10;
+    avgVal.textContent = (Math.round(avg * 100) / 100).toFixed(2) + '%';
+    avgRound.textContent = avg1.toFixed(1) + '%';
+    const threshold = Number(passThreshold.value) || 0;
+    if (avg >= threshold) {
+      passfail.innerHTML = '<span class="pass">PASS — learner meets threshold ('+threshold+'%)</span>';
+    } else {
+      passfail.innerHTML = '<span class="fail">FAIL — learner below threshold ('+threshold+'%)</span>';
+    }
+    resultArea.style.display = 'block';
+    // store computed average (optional)
+    localStorage.setItem(keyPrefix + 'avg', String(avg));
+  }
+
+  saveBtn.addEventListener('click', function(){ saveToLocal(); });
+  calcBtn.addEventListener('click', function(){ calculateAndShow(); });
+  clearBtn.addEventListener('click', function(){ if(confirm('Clear saved scores?')) clearLocal(); });
+  copyBtn.addEventListener('click', function(){
+    const txt = avgVal.textContent || '';
+    navigator.clipboard && navigator.clipboard.writeText(txt).then(function(){
+      alert('Copied: ' + txt);
+    }, function(){
+      prompt('Copy this value:', txt);
+    });
+  });
+  exportBtn.addEventListener('click', function(){
+    const out = {
+      q1: qEls[0].value||null,
+      q2: qEls[1].value||null,
+      q3: qEls[2].value||null,
+      average: localStorage.getItem(keyPrefix + 'avg') || null,
+      passThreshold: passThreshold.value
+    };
+    const blob = new Blob([JSON.stringify(out, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'rise-module-score.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  });
+
+  // init: load local and parse URL params
+  readFromLocal();
+  parseURLParams();
+})();
+</script>
+</body>
+</html>
